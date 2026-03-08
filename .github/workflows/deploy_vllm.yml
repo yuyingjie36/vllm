@@ -1,0 +1,46 @@
+name: Deploy vLLM to Cloud
+
+on:
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      model_name:
+        description: 'Model to deploy'
+        required: true
+        default: 'deepseek-ai/DeepSeek-Coder-V2-7B'
+      port:
+        description: 'Port to expose'
+        required: true
+        default: '8000'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install vllm
+          pip install fastapi uvicorn
+
+      - name: Start vLLM OpenAI-compatible server
+        run: |
+          python -m vllm.entrypoints.openai.api_server \
+            --model ${{ github.event.inputs.model_name }} \
+            --port ${{ github.event.inputs.port }} \
+            --host 0.0.0.0 &
+          sleep 10  # 等待服务启动
+
+      - name: Expose server to internet (using ngrok)
+        uses: ngrok/ngrok-action@v0.7.0
+        with:
+          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}  # 需要在仓库 Secrets 中配置
+          port: ${{ github.event.inputs.port }}
+          proto: http
